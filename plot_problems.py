@@ -29,6 +29,9 @@ args = parser.parse_args()
 DATA_FILE = args.data_file
 SAVE = args.save
 SHOW = args.show
+if not SAVE and not SHOW:
+    print("Please specify --save or --show to save or display the plots.")
+    exit(1)
 try:
     with open(DATA_FILE, "r") as file:
         data = json.load(file)

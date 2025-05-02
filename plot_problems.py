@@ -1,55 +1,39 @@
-def number_to_css_gradient_hex(n: int) -> str:
-    def hex_to_rgb(h: str):
-        h = h.lstrip('#')
-        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-
-    def rgb_to_hex(rgb):
-        return '#' + ''.join(f'{v:02X}' for v in rgb)
-
-    positions = [-0.2, 0.4, 0.7, 1.0]
-    hex_colors = [
-        '#FF411A',#error
-        '#FFD15C',#partial 1
-        '#BEDF81',#partial 2
-        '#7AAB79',#ac100
-    ]
-
-    rgbs = [hex_to_rgb(h) for h in hex_colors]
-
-    t = (n - 1) / 98
-
-    if t <= positions[0]:
-        r, g, b = rgbs[0]
-    elif t >= positions[-1]:
-        r, g, b = rgbs[-1]
-    else:
-        for i in range(len(positions) - 1):
-            if positions[i] <= t < positions[i+1]:
-                span = positions[i+1] - positions[i]
-                u = (t - positions[i]) / span
-                r0, g0, b0 = rgbs[i]
-                r1, g1, b1 = rgbs[i+1]
-                r = round((1 - u) * r0 + u * r1)
-                g = round((1 - u) * g0 + u * g1)
-                b = round((1 - u) * b0 + u * b1)
-                break
-
-    return rgb_to_hex((r, g, b))
-
 import json
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.patches import Patch
 from datetime import datetime
 from collections import defaultdict
-from matplotlib.patches import Patch
+from gradient import score_to_color
+import argparse
 
-DATA_FILE = 'standings_data.json'
-SAVE = True
+parser = argparse.ArgumentParser(description="Plot problem statistics from standings data.")
+parser.add_argument(
+    "--data-file", 
+    type=str, 
+    default="standings_data.json", 
+    help="Path to the JSON file containing standings data (default: standings_data.json)"
+)
+parser.add_argument(
+    "--save", 
+    action="store_true", 
+    help="Save the plots as PNG files"
+)
+parser.add_argument(
+    "--show",
+    action="store_true",
+    help="Show the plots interactively"
+)
+args = parser.parse_args()
+
+DATA_FILE = args.data_file
+SAVE = args.save
+SHOW = args.show
 try:
     with open(DATA_FILE, "r") as file:
         data = json.load(file)
 except (FileNotFoundError, json.JSONDecodeError):
-    print("Scrape data first or rename the previously scraped file to 'standings_data.json'")
+    print("Scrape data before plotting. If you have a valid data file use --data-file to specify it.")
     exit(1)
 
 timestamps = [entry["timestamp"] for entry in data]
@@ -107,12 +91,12 @@ for problem, problem_data in problems_data.items():
     bar_width = 0.02
     for timestamp in all_timestamps:
         if timestamp in change_counts:
-            counts = change_counts[timestamp] # 7aab79  39a137
+            counts = change_counts[timestamp]
             ax.bar(timestamp, counts["100p"], width=bar_width, color='#9cd09d', label='100p' if timestamp == change_timestamps[0] else "")
             p = 0
             for i in range(99, 0, -1):
                 if str(i) in counts:
-                    color_partial = number_to_css_gradient_hex(i)
+                    color_partial = score_to_color(i)
                     ax.bar(timestamp, counts[str(i)], width=bar_width, color=color_partial, label=f'{i}p' if timestamp == change_timestamps[0] else "", bottom=counts["100p"]+p)
                     p += counts[str(i)]
             ax.bar(timestamp, counts["0p_with_try"], width=bar_width, color='#ff411a', label='0p with try' if timestamp == change_timestamps[0] else "", bottom=counts["100p"] + p)#counts["1-99p"])
@@ -128,7 +112,7 @@ for problem, problem_data in problems_data.items():
     legend_handles = [ Patch(facecolor='#9cd09d', label='100p') ]
     for score in score_labels:
         legend_handles.append(
-            Patch(facecolor=number_to_css_gradient_hex(int(score)), label=f'{score}p')
+            Patch(facecolor=score_to_color(int(score)), label=f'{score}p')
         )
     legend_handles.append( Patch(facecolor='#ff411a', label='0p with try') )
 
@@ -144,3 +128,5 @@ for problem, problem_data in problems_data.items():
     plt.tight_layout()
     if SAVE:
         plt.savefig(f'problem_{problem}.png', bbox_inches='tight')
+    if SHOW:
+        plt.show()
